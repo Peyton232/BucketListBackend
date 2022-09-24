@@ -1,0 +1,10 @@
+project-name: github.com/Peyton232/todo
+package: api
+root-name: todo
+output-direc: ""
+generate:
+    echo-server: true
+    embedded-spec: true
+additional-imports:
+    - alias: .
+      package: github.com/Peyton232/todo/models

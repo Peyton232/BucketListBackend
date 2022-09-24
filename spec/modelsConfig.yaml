@@ -1,0 +1,6 @@
+project-name: ""
+package: models
+root-name: ""
+output-direc: ""
+generate:
+    models: true
