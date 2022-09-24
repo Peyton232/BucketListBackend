@@ -15,7 +15,7 @@ type DB struct {
 }
 
 // make env vars
-var mongoUri string = "mongodb+srv://admin:password@cluster0.5zlwicm.mongodb.net/?retryWrites=true&w=majority"
+var mongoUri string = "mongodb+srv://admin:Lb0eMDLh0g6yY2Yp@cluster0.5zlwicm.mongodb.net/?retryWrites=true&w=majority"
 var mongoDb string = "hackDFW"
 
 func ConnectDB() (*DB, error) {
