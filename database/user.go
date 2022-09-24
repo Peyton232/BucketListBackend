@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"log"
 	"time"
 
 	model "github.com/Peyton232/todo/models"
@@ -13,7 +14,17 @@ func (db *DB) GetUsers() []model.User {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	users := []model.User{}
-	db.users.FindOne(ctx, bson.M{}).Decode(&users)
+	res, _ := db.users.Find(ctx, bson.M{})
+	for res.Next(ctx) {
+		var user model.User
+		err := res.Decode(&user)
+		if err != nil {
+			log.Print(err)
+			log.Print("\nunable to read user model in database package\n")
+			return nil
+		}
+		users = append(users, user)
+	}
 	return users
 }
 
