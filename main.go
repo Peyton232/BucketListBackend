@@ -12,8 +12,8 @@ import (
 )
 
 // change to env vars maybe
-var port int = 42069
-var host string = "localhost"
+var port int = 8080
+var host string = "127.0.0.1"
 
 func main() {
 	var port = flag.Int("port", port, "Port for test HTTP server")
@@ -43,7 +43,7 @@ func main() {
 	// OpenAPI schema.
 	e.Use(middleware.OapiRequestValidator(swagger))
 
-	// We now register our petStore above as the handler for the interface
+	// We now register our api above as the handler for the interface
 	api.RegisterHandlers(e, handler)
 
 	// And we serve HTTP until the world ends.

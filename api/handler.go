@@ -28,7 +28,8 @@ func NewHandler() (*Handler, error) {
 // Here, we implement all of the handlers in the ServerInterface
 func (p *Handler) FindUsers(ctx echo.Context, params FindUsersParams) error {
 	// BUSINESS LOGIC
-	return ctx.NoContent(http.StatusNotImplemented)
+	return ctx.HTML(404, "FUCK")
+	// return ctx.NoContent(http.StatusNotImplemented)
 }
 
 func (p *Handler) AddUser(ctx echo.Context) error {
