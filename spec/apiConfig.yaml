@@ -3,7 +3,7 @@ package: api
 root-name: todo
 output-direc: ""
 generate:
-    echo-server: true
+    chi-server: true
     embedded-spec: true
 additional-imports:
     - alias: .

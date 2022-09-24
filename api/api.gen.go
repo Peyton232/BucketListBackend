@@ -16,639 +16,1034 @@ import (
 	. "github.com/Peyton232/todo/models"
 	"github.com/deepmap/oapi-codegen/pkg/runtime"
 	"github.com/getkin/kin-openapi/openapi3"
-	"github.com/labstack/echo/v4"
+	"github.com/go-chi/chi/v5"
 )
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// returns all users
 	// (GET /users)
-	FindUsers(ctx echo.Context, params FindUsersParams) error
+	FindUsers(w http.ResponseWriter, r *http.Request, params FindUsersParams)
 	// Creates a new User
 	// (POST /users)
-	AddUser(ctx echo.Context) error
+	AddUser(w http.ResponseWriter, r *http.Request)
 	// Update an existing user
 	// (PUT /users)
-	UpdateUser(ctx echo.Context) error
+	UpdateUser(w http.ResponseWriter, r *http.Request)
 	// Deletes a user by ID
 	// (DELETE /users/{id})
-	DeleteUser(ctx echo.Context, id int64) error
+	DeleteUser(w http.ResponseWriter, r *http.Request, id int64)
 	// Returns a user by ID
 	// (GET /users/{id})
-	FindUserByID(ctx echo.Context, id int64) error
+	FindUserByID(w http.ResponseWriter, r *http.Request, id int64)
 	// get all Achievements
 	// (GET /users/{id}/Achievements/)
-	GetAchievements(ctx echo.Context, id int64) error
+	GetAchievements(w http.ResponseWriter, r *http.Request, id int64)
 	// add new Achievements
 	// (POST /users/{id}/Achievements/)
-	AddAchievements(ctx echo.Context, id int64) error
+	AddAchievements(w http.ResponseWriter, r *http.Request, id int64)
 	// update Achievement
 	// (PUT /users/{id}/Achievements/)
-	UpdateAchievements(ctx echo.Context, id int64) error
+	UpdateAchievements(w http.ResponseWriter, r *http.Request, id int64)
 	// delete an Achievement by name
 	// (DELETE /users/{id}/Achievements/{name})
-	DeleteAchievement(ctx echo.Context, id int64, name string) error
+	DeleteAchievement(w http.ResponseWriter, r *http.Request, id int64, name string)
 	// get an Achievement by name
 	// (GET /users/{id}/Achievements/{name})
-	GetAchievement(ctx echo.Context, id int64, name string) error
+	GetAchievement(w http.ResponseWriter, r *http.Request, id int64, name string)
 	// get alerts
 	// (GET /users/{id}/alerts)
-	GetAlerts(ctx echo.Context, id int64) error
+	GetAlerts(w http.ResponseWriter, r *http.Request, id int64)
 	// insert new alert
 	// (POST /users/{id}/alerts)
-	AddAlert(ctx echo.Context, id int64) error
+	AddAlert(w http.ResponseWriter, r *http.Request, id int64)
 	// update an alert
 	// (PUT /users/{id}/alerts)
-	UpdateAlert(ctx echo.Context, id int64) error
+	UpdateAlert(w http.ResponseWriter, r *http.Request, id int64)
 	// delete an Achievement by name
 	// (DELETE /users/{id}/alerts/{name})
-	DeleteAlert(ctx echo.Context, id int64, name string) error
+	DeleteAlert(w http.ResponseWriter, r *http.Request, id int64, name string)
 	// delete an alert by name
 	// (GET /users/{id}/alerts/{name})
-	GetAlert(ctx echo.Context, id int64, name string) error
+	GetAlert(w http.ResponseWriter, r *http.Request, id int64, name string)
 	// returns all of this users buckets
 	// (GET /users/{id}/buckets)
-	FindBuckets(ctx echo.Context, id int32) error
+	FindBuckets(w http.ResponseWriter, r *http.Request, id int32)
 	// Creates a new Bucket
 	// (POST /users/{id}/buckets)
-	AddBucket(ctx echo.Context, id int32) error
+	AddBucket(w http.ResponseWriter, r *http.Request, id int32)
 	// Update an existing bucket
 	// (PUT /users/{id}/buckets)
-	UpdateBucket(ctx echo.Context, id int32) error
+	UpdateBucket(w http.ResponseWriter, r *http.Request, id int32)
 	// Deletes a bucket by name
 	// (DELETE /users/{id}/buckets/{name})
-	DeleteBucket(ctx echo.Context, id int64, name string) error
+	DeleteBucket(w http.ResponseWriter, r *http.Request, id int64, name string)
 	// Returns a bucket by name
 	// (GET /users/{id}/buckets/{name})
-	FindBucketByName(ctx echo.Context, id int32, name string) error
+	FindBucketByName(w http.ResponseWriter, r *http.Request, id int32, name string)
 	// get transactions
 	// (GET /users/{id}/buckets/{name}/transactions)
-	GetTransactions(ctx echo.Context, id int64, name string) error
+	GetTransactions(w http.ResponseWriter, r *http.Request, id int64, name string)
 	// Inserts a new transaction
 	// (POST /users/{id}/buckets/{name}/transactions)
-	InsertTransaction(ctx echo.Context, id int64, name string) error
+	InsertTransaction(w http.ResponseWriter, r *http.Request, id int64, name string)
 	// update a transaction
 	// (PUT /users/{id}/buckets/{name}/transactions)
-	UpdateTransaction(ctx echo.Context, id int64, name string) error
+	UpdateTransaction(w http.ResponseWriter, r *http.Request, id int64, name string)
 	// delete a transaction
 	// (DELETE /users/{id}/buckets/{name}/transactions/{timestamp})
-	DeeleteTransaction(ctx echo.Context, id int64, name string, timestamp string) error
+	DeeleteTransaction(w http.ResponseWriter, r *http.Request, id int64, name string, timestamp string)
 	// get a transaction by timestamp
 	// (GET /users/{id}/buckets/{name}/transactions/{timestamp})
-	GetTransaction(ctx echo.Context, id int64, name string, timestamp string) error
+	GetTransaction(w http.ResponseWriter, r *http.Request, id int64, name string, timestamp string)
 }
 
-// ServerInterfaceWrapper converts echo contexts to parameters.
+// ServerInterfaceWrapper converts contexts to parameters.
 type ServerInterfaceWrapper struct {
-	Handler ServerInterface
+	Handler            ServerInterface
+	HandlerMiddlewares []MiddlewareFunc
+	ErrorHandlerFunc   func(w http.ResponseWriter, r *http.Request, err error)
 }
 
-// FindUsers converts echo context to params.
-func (w *ServerInterfaceWrapper) FindUsers(ctx echo.Context) error {
+type MiddlewareFunc func(http.Handler) http.Handler
+
+// FindUsers operation middleware
+func (siw *ServerInterfaceWrapper) FindUsers(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params FindUsersParams
+
 	// ------------- Optional query parameter "limit" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "limit", ctx.QueryParams(), &params.Limit)
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter limit: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.FindUsers(ctx, params)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.FindUsers(w, r, params)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// AddUser converts echo context to params.
-func (w *ServerInterfaceWrapper) AddUser(ctx echo.Context) error {
-	var err error
+// AddUser operation middleware
+func (siw *ServerInterfaceWrapper) AddUser(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.AddUser(ctx)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddUser(w, r)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// UpdateUser converts echo context to params.
-func (w *ServerInterfaceWrapper) UpdateUser(ctx echo.Context) error {
-	var err error
+// UpdateUser operation middleware
+func (siw *ServerInterfaceWrapper) UpdateUser(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.UpdateUser(ctx)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateUser(w, r)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// DeleteUser converts echo context to params.
-func (w *ServerInterfaceWrapper) DeleteUser(ctx echo.Context) error {
+// DeleteUser operation middleware
+func (siw *ServerInterfaceWrapper) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.DeleteUser(ctx, id)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteUser(w, r, id)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// FindUserByID converts echo context to params.
-func (w *ServerInterfaceWrapper) FindUserByID(ctx echo.Context) error {
+// FindUserByID operation middleware
+func (siw *ServerInterfaceWrapper) FindUserByID(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.FindUserByID(ctx, id)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.FindUserByID(w, r, id)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// GetAchievements converts echo context to params.
-func (w *ServerInterfaceWrapper) GetAchievements(ctx echo.Context) error {
+// GetAchievements operation middleware
+func (siw *ServerInterfaceWrapper) GetAchievements(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.GetAchievements(ctx, id)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAchievements(w, r, id)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// AddAchievements converts echo context to params.
-func (w *ServerInterfaceWrapper) AddAchievements(ctx echo.Context) error {
+// AddAchievements operation middleware
+func (siw *ServerInterfaceWrapper) AddAchievements(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.AddAchievements(ctx, id)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddAchievements(w, r, id)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// UpdateAchievements converts echo context to params.
-func (w *ServerInterfaceWrapper) UpdateAchievements(ctx echo.Context) error {
+// UpdateAchievements operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAchievements(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.UpdateAchievements(ctx, id)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAchievements(w, r, id)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// DeleteAchievement converts echo context to params.
-func (w *ServerInterfaceWrapper) DeleteAchievement(ctx echo.Context) error {
+// DeleteAchievement operation middleware
+func (siw *ServerInterfaceWrapper) DeleteAchievement(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
 	// ------------- Path parameter "name" -------------
 	var name string
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, ctx.Param("name"), &name)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, chi.URLParam(r, "name"), &name)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter name: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.DeleteAchievement(ctx, id, name)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteAchievement(w, r, id, name)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// GetAchievement converts echo context to params.
-func (w *ServerInterfaceWrapper) GetAchievement(ctx echo.Context) error {
+// GetAchievement operation middleware
+func (siw *ServerInterfaceWrapper) GetAchievement(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
 	// ------------- Path parameter "name" -------------
 	var name string
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, ctx.Param("name"), &name)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, chi.URLParam(r, "name"), &name)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter name: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.GetAchievement(ctx, id, name)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAchievement(w, r, id, name)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// GetAlerts converts echo context to params.
-func (w *ServerInterfaceWrapper) GetAlerts(ctx echo.Context) error {
+// GetAlerts operation middleware
+func (siw *ServerInterfaceWrapper) GetAlerts(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.GetAlerts(ctx, id)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAlerts(w, r, id)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// AddAlert converts echo context to params.
-func (w *ServerInterfaceWrapper) AddAlert(ctx echo.Context) error {
+// AddAlert operation middleware
+func (siw *ServerInterfaceWrapper) AddAlert(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.AddAlert(ctx, id)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddAlert(w, r, id)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// UpdateAlert converts echo context to params.
-func (w *ServerInterfaceWrapper) UpdateAlert(ctx echo.Context) error {
+// UpdateAlert operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAlert(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.UpdateAlert(ctx, id)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAlert(w, r, id)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// DeleteAlert converts echo context to params.
-func (w *ServerInterfaceWrapper) DeleteAlert(ctx echo.Context) error {
+// DeleteAlert operation middleware
+func (siw *ServerInterfaceWrapper) DeleteAlert(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
 	// ------------- Path parameter "name" -------------
 	var name string
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, ctx.Param("name"), &name)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, chi.URLParam(r, "name"), &name)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter name: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.DeleteAlert(ctx, id, name)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteAlert(w, r, id, name)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// GetAlert converts echo context to params.
-func (w *ServerInterfaceWrapper) GetAlert(ctx echo.Context) error {
+// GetAlert operation middleware
+func (siw *ServerInterfaceWrapper) GetAlert(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
 	// ------------- Path parameter "name" -------------
 	var name string
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, ctx.Param("name"), &name)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, chi.URLParam(r, "name"), &name)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter name: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.GetAlert(ctx, id, name)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAlert(w, r, id, name)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// FindBuckets converts echo context to params.
-func (w *ServerInterfaceWrapper) FindBuckets(ctx echo.Context) error {
+// FindBuckets operation middleware
+func (siw *ServerInterfaceWrapper) FindBuckets(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int32
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.FindBuckets(ctx, id)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.FindBuckets(w, r, id)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// AddBucket converts echo context to params.
-func (w *ServerInterfaceWrapper) AddBucket(ctx echo.Context) error {
+// AddBucket operation middleware
+func (siw *ServerInterfaceWrapper) AddBucket(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int32
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.AddBucket(ctx, id)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddBucket(w, r, id)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// UpdateBucket converts echo context to params.
-func (w *ServerInterfaceWrapper) UpdateBucket(ctx echo.Context) error {
+// UpdateBucket operation middleware
+func (siw *ServerInterfaceWrapper) UpdateBucket(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int32
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.UpdateBucket(ctx, id)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateBucket(w, r, id)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// DeleteBucket converts echo context to params.
-func (w *ServerInterfaceWrapper) DeleteBucket(ctx echo.Context) error {
+// DeleteBucket operation middleware
+func (siw *ServerInterfaceWrapper) DeleteBucket(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
 	// ------------- Path parameter "name" -------------
 	var name string
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, ctx.Param("name"), &name)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, chi.URLParam(r, "name"), &name)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter name: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.DeleteBucket(ctx, id, name)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteBucket(w, r, id, name)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// FindBucketByName converts echo context to params.
-func (w *ServerInterfaceWrapper) FindBucketByName(ctx echo.Context) error {
+// FindBucketByName operation middleware
+func (siw *ServerInterfaceWrapper) FindBucketByName(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int32
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
 	// ------------- Path parameter "name" -------------
 	var name string
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, ctx.Param("name"), &name)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, chi.URLParam(r, "name"), &name)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter name: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.FindBucketByName(ctx, id, name)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.FindBucketByName(w, r, id, name)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// GetTransactions converts echo context to params.
-func (w *ServerInterfaceWrapper) GetTransactions(ctx echo.Context) error {
+// GetTransactions operation middleware
+func (siw *ServerInterfaceWrapper) GetTransactions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
 	// ------------- Path parameter "name" -------------
 	var name string
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, ctx.Param("name"), &name)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, chi.URLParam(r, "name"), &name)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter name: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.GetTransactions(ctx, id, name)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTransactions(w, r, id, name)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// InsertTransaction converts echo context to params.
-func (w *ServerInterfaceWrapper) InsertTransaction(ctx echo.Context) error {
+// InsertTransaction operation middleware
+func (siw *ServerInterfaceWrapper) InsertTransaction(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
 	// ------------- Path parameter "name" -------------
 	var name string
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, ctx.Param("name"), &name)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, chi.URLParam(r, "name"), &name)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter name: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.InsertTransaction(ctx, id, name)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.InsertTransaction(w, r, id, name)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// UpdateTransaction converts echo context to params.
-func (w *ServerInterfaceWrapper) UpdateTransaction(ctx echo.Context) error {
+// UpdateTransaction operation middleware
+func (siw *ServerInterfaceWrapper) UpdateTransaction(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
 	// ------------- Path parameter "name" -------------
 	var name string
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, ctx.Param("name"), &name)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, chi.URLParam(r, "name"), &name)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter name: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.UpdateTransaction(ctx, id, name)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateTransaction(w, r, id, name)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// DeeleteTransaction converts echo context to params.
-func (w *ServerInterfaceWrapper) DeeleteTransaction(ctx echo.Context) error {
+// DeeleteTransaction operation middleware
+func (siw *ServerInterfaceWrapper) DeeleteTransaction(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
 	// ------------- Path parameter "name" -------------
 	var name string
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, ctx.Param("name"), &name)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, chi.URLParam(r, "name"), &name)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter name: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
 	}
 
 	// ------------- Path parameter "timestamp" -------------
 	var timestamp string
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "timestamp", runtime.ParamLocationPath, ctx.Param("timestamp"), &timestamp)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "timestamp", runtime.ParamLocationPath, chi.URLParam(r, "timestamp"), &timestamp)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter timestamp: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "timestamp", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.DeeleteTransaction(ctx, id, name, timestamp)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeeleteTransaction(w, r, id, name, timestamp)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// GetTransaction converts echo context to params.
-func (w *ServerInterfaceWrapper) GetTransaction(ctx echo.Context) error {
+// GetTransaction operation middleware
+func (siw *ServerInterfaceWrapper) GetTransaction(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
+
 	// ------------- Path parameter "id" -------------
 	var id int64
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, ctx.Param("id"), &id)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "id", runtime.ParamLocationPath, chi.URLParam(r, "id"), &id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
 	}
 
 	// ------------- Path parameter "name" -------------
 	var name string
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, ctx.Param("name"), &name)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "name", runtime.ParamLocationPath, chi.URLParam(r, "name"), &name)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter name: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
 	}
 
 	// ------------- Path parameter "timestamp" -------------
 	var timestamp string
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "timestamp", runtime.ParamLocationPath, ctx.Param("timestamp"), &timestamp)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "timestamp", runtime.ParamLocationPath, chi.URLParam(r, "timestamp"), &timestamp)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter timestamp: %s", err))
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "timestamp", Err: err})
+		return
 	}
 
-	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.GetTransaction(ctx, id, name, timestamp)
-	return err
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTransaction(w, r, id, name, timestamp)
+	})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// This is a simple interface which specifies echo.Route addition functions which
-// are present on both echo.Echo and echo.Group, since we want to allow using
-// either of them for path registration
-type EchoRouter interface {
-	CONNECT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	DELETE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	GET(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	HEAD(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	OPTIONS(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	PATCH(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	POST(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	PUT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	TRACE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
+type UnescapedCookieParamError struct {
+	ParamName string
+	Err       error
 }
 
-// RegisterHandlers adds each server route to the EchoRouter.
-func RegisterHandlers(router EchoRouter, si ServerInterface) {
-	RegisterHandlersWithBaseURL(router, si, "")
+func (e *UnescapedCookieParamError) Error() string {
+	return fmt.Sprintf("error unescaping cookie parameter '%s'", e.ParamName)
 }
 
-// Registers handlers, and prepends BaseURL to the paths, so that the paths
-// can be served under a prefix.
-func RegisterHandlersWithBaseURL(router EchoRouter, si ServerInterface, baseURL string) {
+func (e *UnescapedCookieParamError) Unwrap() error {
+	return e.Err
+}
 
+type UnmarshalingParamError struct {
+	ParamName string
+	Err       error
+}
+
+func (e *UnmarshalingParamError) Error() string {
+	return fmt.Sprintf("Error unmarshaling parameter %s as JSON: %s", e.ParamName, e.Err.Error())
+}
+
+func (e *UnmarshalingParamError) Unwrap() error {
+	return e.Err
+}
+
+type RequiredParamError struct {
+	ParamName string
+}
+
+func (e *RequiredParamError) Error() string {
+	return fmt.Sprintf("Query argument %s is required, but not found", e.ParamName)
+}
+
+type RequiredHeaderError struct {
+	ParamName string
+	Err       error
+}
+
+func (e *RequiredHeaderError) Error() string {
+	return fmt.Sprintf("Header parameter %s is required, but not found", e.ParamName)
+}
+
+func (e *RequiredHeaderError) Unwrap() error {
+	return e.Err
+}
+
+type InvalidParamFormatError struct {
+	ParamName string
+	Err       error
+}
+
+func (e *InvalidParamFormatError) Error() string {
+	return fmt.Sprintf("Invalid format for parameter %s: %s", e.ParamName, e.Err.Error())
+}
+
+func (e *InvalidParamFormatError) Unwrap() error {
+	return e.Err
+}
+
+type TooManyValuesForParamError struct {
+	ParamName string
+	Count     int
+}
+
+func (e *TooManyValuesForParamError) Error() string {
+	return fmt.Sprintf("Expected one value for %s, got %d", e.ParamName, e.Count)
+}
+
+// Handler creates http.Handler with routing matching OpenAPI spec.
+func Handler(si ServerInterface) http.Handler {
+	return HandlerWithOptions(si, ChiServerOptions{})
+}
+
+type ChiServerOptions struct {
+	BaseURL          string
+	BaseRouter       chi.Router
+	Middlewares      []MiddlewareFunc
+	ErrorHandlerFunc func(w http.ResponseWriter, r *http.Request, err error)
+}
+
+// HandlerFromMux creates http.Handler with routing matching OpenAPI spec based on the provided mux.
+func HandlerFromMux(si ServerInterface, r chi.Router) http.Handler {
+	return HandlerWithOptions(si, ChiServerOptions{
+		BaseRouter: r,
+	})
+}
+
+func HandlerFromMuxWithBaseURL(si ServerInterface, r chi.Router, baseURL string) http.Handler {
+	return HandlerWithOptions(si, ChiServerOptions{
+		BaseURL:    baseURL,
+		BaseRouter: r,
+	})
+}
+
+// HandlerWithOptions creates http.Handler with additional options
+func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handler {
+	r := options.BaseRouter
+
+	if r == nil {
+		r = chi.NewRouter()
+	}
+	if options.ErrorHandlerFunc == nil {
+		options.ErrorHandlerFunc = func(w http.ResponseWriter, r *http.Request, err error) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+	}
 	wrapper := ServerInterfaceWrapper{
-		Handler: si,
+		Handler:            si,
+		HandlerMiddlewares: options.Middlewares,
+		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
-	router.GET(baseURL+"/users", wrapper.FindUsers)
-	router.POST(baseURL+"/users", wrapper.AddUser)
-	router.PUT(baseURL+"/users", wrapper.UpdateUser)
-	router.DELETE(baseURL+"/users/:id", wrapper.DeleteUser)
-	router.GET(baseURL+"/users/:id", wrapper.FindUserByID)
-	router.GET(baseURL+"/users/:id/Achievements/", wrapper.GetAchievements)
-	router.POST(baseURL+"/users/:id/Achievements/", wrapper.AddAchievements)
-	router.PUT(baseURL+"/users/:id/Achievements/", wrapper.UpdateAchievements)
-	router.DELETE(baseURL+"/users/:id/Achievements/:name", wrapper.DeleteAchievement)
-	router.GET(baseURL+"/users/:id/Achievements/:name", wrapper.GetAchievement)
-	router.GET(baseURL+"/users/:id/alerts", wrapper.GetAlerts)
-	router.POST(baseURL+"/users/:id/alerts", wrapper.AddAlert)
-	router.PUT(baseURL+"/users/:id/alerts", wrapper.UpdateAlert)
-	router.DELETE(baseURL+"/users/:id/alerts/:name", wrapper.DeleteAlert)
-	router.GET(baseURL+"/users/:id/alerts/:name", wrapper.GetAlert)
-	router.GET(baseURL+"/users/:id/buckets", wrapper.FindBuckets)
-	router.POST(baseURL+"/users/:id/buckets", wrapper.AddBucket)
-	router.PUT(baseURL+"/users/:id/buckets", wrapper.UpdateBucket)
-	router.DELETE(baseURL+"/users/:id/buckets/:name", wrapper.DeleteBucket)
-	router.GET(baseURL+"/users/:id/buckets/:name", wrapper.FindBucketByName)
-	router.GET(baseURL+"/users/:id/buckets/:name/transactions", wrapper.GetTransactions)
-	router.POST(baseURL+"/users/:id/buckets/:name/transactions", wrapper.InsertTransaction)
-	router.PUT(baseURL+"/users/:id/buckets/:name/transactions", wrapper.UpdateTransaction)
-	router.DELETE(baseURL+"/users/:id/buckets/:name/transactions/:timestamp", wrapper.DeeleteTransaction)
-	router.GET(baseURL+"/users/:id/buckets/:name/transactions/:timestamp", wrapper.GetTransaction)
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/users", wrapper.FindUsers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/users", wrapper.AddUser)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/users", wrapper.UpdateUser)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/users/{id}", wrapper.DeleteUser)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/users/{id}", wrapper.FindUserByID)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/users/{id}/Achievements/", wrapper.GetAchievements)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/users/{id}/Achievements/", wrapper.AddAchievements)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/users/{id}/Achievements/", wrapper.UpdateAchievements)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/users/{id}/Achievements/{name}", wrapper.DeleteAchievement)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/users/{id}/Achievements/{name}", wrapper.GetAchievement)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/users/{id}/alerts", wrapper.GetAlerts)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/users/{id}/alerts", wrapper.AddAlert)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/users/{id}/alerts", wrapper.UpdateAlert)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/users/{id}/alerts/{name}", wrapper.DeleteAlert)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/users/{id}/alerts/{name}", wrapper.GetAlert)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/users/{id}/buckets", wrapper.FindBuckets)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/users/{id}/buckets", wrapper.AddBucket)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/users/{id}/buckets", wrapper.UpdateBucket)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/users/{id}/buckets/{name}", wrapper.DeleteBucket)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/users/{id}/buckets/{name}", wrapper.FindBucketByName)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/users/{id}/buckets/{name}/transactions", wrapper.GetTransactions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/users/{id}/buckets/{name}/transactions", wrapper.InsertTransaction)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/users/{id}/buckets/{name}/transactions", wrapper.UpdateTransaction)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/users/{id}/buckets/{name}/transactions/{timestamp}", wrapper.DeeleteTransaction)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/users/{id}/buckets/{name}/transactions/{timestamp}", wrapper.GetTransaction)
+	})
 
+	return r
 }
 
 // Base64 encoded, gzipped, json marshaled Swagger object
