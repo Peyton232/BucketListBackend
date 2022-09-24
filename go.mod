@@ -6,6 +6,7 @@ require (
 	github.com/deepmap/oapi-codegen v1.11.0
 	github.com/getkin/kin-openapi v0.103.0
 	github.com/go-chi/chi/v5 v5.0.7
+	github.com/gorilla/mux v1.8.0
 	go.mongodb.org/mongo-driver v1.10.2
 )
 

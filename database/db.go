@@ -11,7 +11,7 @@ import (
 
 type DB struct {
 	client *mongo.Client
-	user   *mongo.Collection
+	users  *mongo.Collection
 }
 
 // make env vars
@@ -29,6 +29,6 @@ func ConnectDB() (*DB, error) {
 	client.Connect(ctx)
 	return &DB{
 		client: client,
-		user:   client.Database(mongoDb).Collection("user"),
+		users:  client.Database(mongoDb).Collection("users"),
 	}, nil
 }

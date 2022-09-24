@@ -1,19 +1,21 @@
 package api
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 
-	. "github.com/Peyton232/todo/database"
+	"github.com/Peyton232/todo/database"
 	. "github.com/Peyton232/todo/models"
 )
 
 type HandlerChi struct {
 	ServerInterfaceWrapper
-	DB *DB
+	DB *database.DB
 }
 
 func NewHandler() (*HandlerChi, error) {
-	db, err := ConnectDB()
+	db, err := database.ConnectDB()
 	if err != nil {
 		return nil, err
 	}
@@ -25,24 +27,53 @@ func NewHandler() (*HandlerChi, error) {
 
 // Here, we implement all of the handlers in the ServerInterface
 func (p HandlerChi) FindUsers(w http.ResponseWriter, r *http.Request, params FindUsersParams) {
-	// BUSINESS LOGIC
+	w.Header().Set("Content-Type", "application/json")
+	users := p.DB.GetUsers()
+	json.NewEncoder(w).Encode(users)
 }
 
 func (p HandlerChi) AddUser(w http.ResponseWriter, r *http.Request) {
-	// BUSINESS LOGIC
+	user := User{}
+	// Try to decode the request body into the struct. If there is an error,
+	// respond to the client with the error message and a 400 status code.
+	err := json.NewDecoder(r.Body).Decode(&user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = p.DB.AddUser(user)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 }
 
 func (p HandlerChi) UpdateUser(w http.ResponseWriter, r *http.Request) {
-	// BUSINESS LOGIC
+	user := User{}
+
+	// Try to decode the request body into the struct. If there is an error,
+	// respond to the client with the error message and a 400 status code.
+	err := json.NewDecoder(r.Body).Decode(&user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = p.DB.UpdateUser(user)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 }
 
 func (p HandlerChi) DeleteUser(w http.ResponseWriter, r *http.Request, id int64) {
-	// BUSINESS LOGIC
+	err := p.DB.DeleteUser(fmt.Sprint(id))
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 }
 
 func (p HandlerChi) FindUserByID(w http.ResponseWriter, r *http.Request, id int64) {
-	// BUSINESS LOGIC
-
+	w.Header().Set("Content-Type", "application/json")
+	user := p.DB.FindUserByID(id)
+	json.NewEncoder(w).Encode(user)
 }
 
 func (p HandlerChi) GetAchievements(w http.ResponseWriter, r *http.Request, id int64) {
