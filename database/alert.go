@@ -9,7 +9,7 @@ import (
 )
 
 // get
-func (db *DB) GetAlerts(ID string) []model.Alert {
+func (db *DB) GetAlerts(ID int64) []model.Alert {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	user := model.User{}
