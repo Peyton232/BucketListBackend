@@ -17,6 +17,7 @@ var port int = 8080
 var host string = "localhost"
 
 func main() {
+
 	var port = flag.Int("port", port, "Port for test HTTP server")
 	flag.Parse()
 

@@ -32,7 +32,12 @@ func (p HandlerChi) FindUsers(w http.ResponseWriter, r *http.Request, params Fin
 	json.NewEncoder(w).Encode(users)
 }
 
+func enableCors(w *http.ResponseWriter) {
+	(*w).Header().Set("Access-Control-Allow-Origin", "*")
+}
+
 func (p HandlerChi) AddUser(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
 	user := User{}
 	// Try to decode the request body into the struct. If there is an error,
 	// respond to the client with the error message and a 400 status code.
@@ -48,6 +53,7 @@ func (p HandlerChi) AddUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p HandlerChi) UpdateUser(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
 	user := User{}
 
 	// Try to decode the request body into the struct. If there is an error,
@@ -64,6 +70,7 @@ func (p HandlerChi) UpdateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p HandlerChi) DeleteUser(w http.ResponseWriter, r *http.Request, id int64) {
+	enableCors(&w)
 	err := p.DB.DeleteUser(fmt.Sprint(id))
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -71,6 +78,7 @@ func (p HandlerChi) DeleteUser(w http.ResponseWriter, r *http.Request, id int64)
 }
 
 func (p HandlerChi) FindUserByID(w http.ResponseWriter, r *http.Request, id int64) {
+	enableCors(&w)
 	w.Header().Set("Content-Type", "application/json")
 	user := p.DB.FindUserByID(id)
 	json.NewEncoder(w).Encode(user)
